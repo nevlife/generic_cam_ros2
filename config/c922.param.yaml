@@ -1,0 +1,37 @@
+# Logitech C922. MJPEG modes from v4l2-ctl --list-formats-ext: 1920x1080 up to 30 fps,
+# 1280x720 up to 60 fps. YUYV is limited to 5 fps at 1920x1080 and 30 fps at 640x480.
+/**:
+  ros__parameters:
+    cameras: ["c922"]
+    transport: flux
+    flux_mirror_to_ros: true
+    flux_slot_count: 8
+    reconnect_ms: 500 # 0 turns reconnection off
+    diagnostic_updater:
+      period: 1.0
+
+    common:
+      pixel_format: mjpeg
+      decoder: libjpeg
+      width: 1920
+      height: 1080
+      fps: 30
+      rotation: 0
+      camera_info_path: ""
+      stamp_offset_ns: 0
+      frozen_frame_limit: 30
+      rate:
+        min_ok: 28.0
+        max_ok: 32.0
+        min_warn: 20.0
+        max_warn: 40.0
+        hysteresis_updates: 3
+        immediate_error_report: false
+        immediate_relax_state: true
+      controls:
+        # 1 lets the camera lower the frame rate in low light.
+        exposure_dynamic_framerate: 0
+
+    c922:
+      device: /dev/v4l/by-id/usb-046d_C922_Pro_Stream_Webcam_DB91DCDF-video-index0
+      frame_id: c922

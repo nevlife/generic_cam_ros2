@@ -1,0 +1,50 @@
+# Three cameras on udev names, each rotated upright. A camera block overrides any key of common.
+/**:
+  ros__parameters:
+    cameras: ["rear", "left", "right"]
+    transport: dds
+    flux_mirror_to_ros: false
+    flux_slot_count: 8
+    reconnect_ms: 500 # 0 turns reconnection off
+    diagnostic_updater:
+      period: 1.0
+
+    common:
+      pixel_format: mjpeg
+      decoder: libjpeg
+      width: 2048
+      height: 1536
+      fps: 30
+      rotation: 0
+      camera_info_path: ""
+      stamp_offset_ns: 0
+      frozen_frame_limit: 30
+      rate:
+        min_ok: 28.0
+        max_ok: 32.0
+        min_warn: 20.0
+        max_warn: 40.0
+        hysteresis_updates: 3
+        immediate_error_report: false
+        immediate_relax_state: true
+      # Keys are the names printed by v4l2-ctl -L; a control left out keeps its device value.
+      controls:
+        auto_exposure: 1
+        exposure_time_absolute: 100
+        exposure_dynamic_framerate: 0
+        power_line_frequency: 2
+
+    rear:
+      device: /dev/cam_rear
+      frame_id: cam_rear
+      rotation: 180
+
+    left:
+      device: /dev/cam_side_left
+      frame_id: cam_left
+      rotation: 90
+
+    right:
+      device: /dev/cam_side_right
+      frame_id: cam_right
+      rotation: 270

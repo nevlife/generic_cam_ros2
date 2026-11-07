@@ -1,22 +1,31 @@
 <?xml version="1.0"?>
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
-  <name>multi_cam</name>
+  <name>generic_cam</name>
   <version>0.0.0</version>
-  <description>Multi fisheye camera (4ch) raw publisher using GStreamer</description>
+  <description>General-purpose V4L2 USB camera driver for N cameras with dds or flux transport</description>
   <maintainer email="pcdpcd100@gmail.com">scv</maintainer>
-  <license>Apache-2.0</license>
+  <license>Proprietary</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
   <buildtool_depend>pkg-config</buildtool_depend>
 
+  <depend>camera_calibration_parsers</depend>
+  <depend>diagnostic_msgs</depend>
+  <depend>diagnostic_updater</depend>
+  <depend>flux_cpp</depend>
+  <depend>flux_std_adapters</depend>
+  <depend>libgstreamer-plugins-base1.0-dev</depend>
+  <depend>libgstreamer1.0-dev</depend>
+  <depend>libjpeg</depend>
+  <depend>rcl_interfaces</depend>
   <depend>rclcpp</depend>
-  <depend>std_msgs</depend>
+  <depend>rclcpp_components</depend>
   <depend>sensor_msgs</depend>
 
-  <depend>libgstreamer1.0-dev</depend>
-  <depend>libgstreamer-plugins-base1.0-dev</depend>
+  <exec_depend>flux_components</exec_depend>
 
+  <test_depend>ament_cmake_gtest</test_depend>
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>
 
