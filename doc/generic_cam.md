@@ -12,10 +12,10 @@
 ros2 launch generic_cam generic_cam.launch.py
 ```
 
-| launch 인자 | 기본값 | 뜻                                                                                      |
-| ----------- | ------ | --------------------------------------------------------------------------------------- |
-| `config`    | `c922` | `config/<config>.param.yaml`를 읽는다. 전송과 mirror를 포함한 설정은 이 파일에서 바꾼다 |
-| `transport` | 빈 값  | 값을 주면 yaml의 `transport`를 덮어쓴다. 한 경로의 양 끝을 인자 하나로 맞출 때 쓴다     |
+| launch 인자 | 기본값        | 뜻                                                                                                                             |
+| ----------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `config`    | `generic_cam` | `config/<config>.param.yaml`를 읽는다. 책상의 C922는 `config:=c922`로 띄운다. 전송과 mirror를 포함한 설정은 이 파일에서 바꾼다 |
+| `transport` | 빈 값         | 값을 주면 yaml의 `transport`를 덮어쓴다. 한 경로의 양 끝을 인자 하나로 맞출 때 쓴다                                            |
 
 launch는 flux_components 컨테이너에 노드를 올린다. `ros2 run generic_cam generic_cam_node`로 단독 실행해도 발행은 같게 동작한다.
 
