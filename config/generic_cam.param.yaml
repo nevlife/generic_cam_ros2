@@ -4,7 +4,6 @@
     cameras: ["rear", "left", "right"]
     transport: dds
     flux_mirror_to_ros: false
-    flux_slot_count: 8
     reconnect_ms: 500 # 0 turns reconnection off
     diagnostic_updater:
       period: 1.0

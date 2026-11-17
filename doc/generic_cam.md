@@ -43,7 +43,6 @@ launch는 flux_components 컨테이너에 노드를 올린다. `ros2 run generic
 | `cameras`                   | string[] | 카메라 이름 목록                                                                            |
 | `transport`                 | string   | `dds` 또는 `flux`                                                                           |
 | `flux_mirror_to_ros`        | bool     | flux 발행자의 `mirror_to_ros()`를 켠다                                                      |
-| `flux_slot_count`           | int      | flux 링의 슬롯 수. 슬롯 크기는 이미지 크기로 계산한다                                       |
 | `reconnect_ms`              | int      | 카메라가 끊기면 이 주기로 다시 연다. 0이면 끄고, 켜져 있으면 포맷과 control을 다시 적용한다 |
 | `diagnostic_updater.period` | double   | 진단 주기(초). diagnostic_updater가 선언한다                                                |
 | `<카메라>.device`           | string   | 장치 경로                                                                                   |

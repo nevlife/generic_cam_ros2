@@ -96,7 +96,6 @@ private:
 
   bool use_flux_;
   bool mirror_to_ros_;
-  int64_t flux_slot_count_;
   int64_t reconnect_ms_;
   std::atomic<bool> running_{true};
   std::vector<std::unique_ptr<Camera>> cameras_;

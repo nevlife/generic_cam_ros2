@@ -27,7 +27,6 @@ using FluxImage = sensor_msgs::flux_msg::Image;
 
 constexpr int kFrameWaitMs = 100;
 constexpr const char * kEncoding = "bgr8";
-constexpr std::size_t kFluxStringBytes = 256;
 
 PixelFormat parse_pixel_format(const std::string & name)
 {
@@ -102,7 +101,6 @@ GenericCam::GenericCam(const rclcpp::NodeOptions & options)
   }
   use_flux_ = transport == "flux";
   mirror_to_ros_ = declare_parameter<bool>("flux_mirror_to_ros");
-  flux_slot_count_ = declare_parameter<int64_t>("flux_slot_count");
   reconnect_ms_ = declare_parameter<int64_t>("reconnect_ms");
 
   for (const auto & name : declare_parameter<std::vector<std::string>>("cameras")) {
@@ -255,10 +253,8 @@ void GenericCam::make_publishers(Camera & camera)
     camera.image_pub = create_publisher<sensor_msgs::msg::Image>(base + "/image_raw", qos);
     return;
   }
-  const std::size_t slot_size = camera.out_bytes + FluxImage::kScalarBytes + kFluxStringBytes;
-  camera.flux_pub = std::make_unique<flux::Publisher>(
-    *this, base + "/image_raw", FluxImage::kFingerprint, slot_size,
-    static_cast<std::size_t>(flux_slot_count_));
+  camera.flux_pub =
+    std::make_unique<flux::Publisher>(*this, base + "/image_raw", FluxImage::kFingerprint);
   if (mirror_to_ros_) {
     camera.flux_pub->mirror_to_ros();
   }
