@@ -71,8 +71,8 @@ int run_flux(const rclcpp::Node::SharedPtr & node, const std::string & topic, Re
 {
   using Image = sensor_msgs::flux_msg::Image;
   flux::Subscription subscription(
-    *node, topic, Image::kFingerprint, flux::QoS(1),
-    [&recorder, &node](const flux::FrameView & frame) {
+    *node, topic, flux::QoS(1),
+    [&recorder, &node](const flux::Frame & frame) {
       const int64_t receive_ns = node->now().nanoseconds();
       const Image::View image(frame);
       const int64_t stamp_ns =
@@ -80,7 +80,8 @@ int run_flux(const rclcpp::Node::SharedPtr & node, const std::string & topic, Re
       const int64_t publish_ns =
         static_cast<int64_t>(frame.publish_ns()) + realtime_minus_monotonic_ns();
       recorder.add(stamp_ns, publish_ns, receive_ns);
-    });
+    },
+    {}, Image::kFingerprint);
   flux::Executor executor;
   executor.add(subscription);
   executor.add_node(node);

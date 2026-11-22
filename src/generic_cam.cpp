@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cstdint>
 #include <memory>
 #include <stdexcept>
 #include <string>
@@ -26,6 +27,8 @@ namespace
 using FluxImage = sensor_msgs::flux_msg::Image;
 
 constexpr int kFrameWaitMs = 100;
+// Room in a fixed slot for the image's fixed fields and its frame_id and encoding strings.
+constexpr std::size_t kSlotHeadroom = 8192;
 constexpr const char * kEncoding = "bgr8";
 
 PixelFormat parse_pixel_format(const std::string & name)
@@ -253,8 +256,13 @@ void GenericCam::make_publishers(Camera & camera)
     camera.image_pub = create_publisher<sensor_msgs::msg::Image>(base + "/image_raw", qos);
     return;
   }
-  camera.flux_pub =
-    std::make_unique<flux::Publisher>(*this, base + "/image_raw", FluxImage::kFingerprint);
+  // A fixed slot holds the whole frame, so subscribers on an integrated GPU read it in place.
+  flux::PublisherOptions options;
+  options.alloc = flux::Alloc::Slot;
+  options.slot_size = static_cast<std::uint32_t>(camera.out_bytes + kSlotHeadroom);
+  options.max_slot_size = options.slot_size;
+  camera.flux_pub = std::make_unique<flux::Publisher>(
+    *this, base + "/image_raw", options, FluxImage::kFingerprint);
   if (mirror_to_ros_) {
     camera.flux_pub->mirror_to_ros();
   }
