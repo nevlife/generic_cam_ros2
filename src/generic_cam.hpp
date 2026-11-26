@@ -6,7 +6,7 @@
 #include "v4l2_device.hpp"
 
 #include <diagnostic_updater/diagnostic_updater.hpp>
-#include <flux/publisher.hpp>
+#include <flux_wrapper/flux_wrapper.hpp>
 #include <rcl_interfaces/msg/set_parameters_result.hpp>
 #include <rclcpp/rclcpp.hpp>
 
@@ -61,9 +61,8 @@ private:
     std::vector<RequestedControl> requested_controls;
     std::vector<uint8_t> rotation_scratch;
     sensor_msgs::msg::CameraInfo info;
-    rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr image_pub;
+    std::unique_ptr<flux_wrapper::Publisher<sensor_msgs::msg::Image>> image_pub;
     rclcpp::Publisher<sensor_msgs::msg::CameraInfo>::SharedPtr info_pub;
-    std::unique_ptr<flux::Publisher> flux_pub;
     std::thread thread;
   };
 
@@ -88,14 +87,11 @@ private:
   bool reopen(Camera & camera);
   void handle_frame(Camera & camera, const RawFrame & frame);
   bool write_bgr(Camera & camera, const RawFrame & frame, uint8_t * bgr);
-  bool publish_dds(Camera & camera, const RawFrame & frame, const rclcpp::Time & stamp);
-  bool publish_flux(Camera & camera, const RawFrame & frame, const rclcpp::Time & stamp);
+  bool publish_image(Camera & camera, const RawFrame & frame, const rclcpp::Time & stamp);
   void diagnose(Camera & camera, diagnostic_updater::DiagnosticStatusWrapper & status);
   rcl_interfaces::msg::SetParametersResult on_parameters(
     const std::vector<rclcpp::Parameter> & parameters);
 
-  bool use_flux_;
-  bool mirror_to_ros_;
   int64_t reconnect_ms_;
   std::atomic<bool> running_{true};
   std::vector<std::unique_ptr<Camera>> cameras_;

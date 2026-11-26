@@ -17,13 +17,13 @@ find_package(ament_cmake REQUIRED)
 find_package(camera_calibration_parsers REQUIRED)
 find_package(diagnostic_msgs REQUIRED)
 find_package(diagnostic_updater REQUIRED)
-find_package(flux_cpp REQUIRED)
-find_package(flux_std_adapters REQUIRED)
+find_package(flux_wrapper REQUIRED)
 find_package(JPEG REQUIRED)
 find_package(rcl_interfaces REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rclcpp_components REQUIRED)
 find_package(sensor_msgs REQUIRED)
+find_package(std_msgs REQUIRED)
 
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(GST REQUIRED IMPORTED_TARGET
@@ -42,17 +42,17 @@ target_include_directories(generic_cam_core PUBLIC
 target_link_libraries(generic_cam_core PRIVATE PkgConfig::GST JPEG::JPEG)
 
 add_library(generic_cam_component SHARED src/generic_cam.cpp)
-target_include_directories(generic_cam_component PRIVATE ${flux_std_adapters_INCLUDE_DIRS})
 target_link_libraries(generic_cam_component
   generic_cam_core
   camera_calibration_parsers::camera_calibration_parsers
   diagnostic_updater::diagnostic_updater
-  flux_cpp::flux_cpp
+  flux_wrapper::flux_wrapper
   rclcpp::rclcpp
   rclcpp_components::component
   ${diagnostic_msgs_TARGETS}
   ${rcl_interfaces_TARGETS}
   ${sensor_msgs_TARGETS}
+  ${std_msgs_TARGETS}
 )
 rclcpp_components_register_node(generic_cam_component
   PLUGIN "generic_cam::GenericCam"
@@ -94,9 +94,8 @@ if(BUILD_TESTING)
 
   # Reproduces the numbers in doc/generic_cam.md; needs a running camera, so it is not a test.
   add_executable(latency_probe test/latency_probe.cpp)
-  target_include_directories(latency_probe PRIVATE ${flux_std_adapters_INCLUDE_DIRS})
   target_link_libraries(latency_probe
-    flux_cpp::flux_cpp
+    flux_wrapper::flux_wrapper
     rclcpp::rclcpp
     ${sensor_msgs_TARGETS}
   )

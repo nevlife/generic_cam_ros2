@@ -6,7 +6,7 @@
 #include <rcl_interfaces/msg/parameter_descriptor.hpp>
 #include <rclcpp_components/register_node_macro.hpp>
 
-#include <sensor_msgs/flux/image.hpp>
+#include <std_msgs/msg/header.hpp>
 
 #include <algorithm>
 #include <chrono>
@@ -23,8 +23,6 @@ namespace generic_cam
 
 namespace
 {
-
-using FluxImage = sensor_msgs::flux_msg::Image;
 
 constexpr int kFrameWaitMs = 100;
 // Room in a fixed slot for the image's fixed fields and its frame_id and encoding strings.
@@ -98,12 +96,6 @@ T GenericCam::declare_camera_parameter(const std::string & camera, const std::st
 GenericCam::GenericCam(const rclcpp::NodeOptions & options)
 : Node("generic_cam", options), updater_(this)
 {
-  const auto transport = declare_parameter<std::string>("transport");
-  if (transport != "dds" && transport != "flux") {
-    throw std::invalid_argument("transport must be dds or flux, got " + transport);
-  }
-  use_flux_ = transport == "flux";
-  mirror_to_ros_ = declare_parameter<bool>("flux_mirror_to_ros");
   reconnect_ms_ = declare_parameter<int64_t>("reconnect_ms");
 
   for (const auto & name : declare_parameter<std::vector<std::string>>("cameras")) {
@@ -176,7 +168,7 @@ std::unique_ptr<GenericCam::Camera> GenericCam::make_camera(const std::string & 
   RCLCPP_INFO(
     get_logger(), "[%s] %s %ux%u@%u, publishing %ux%u over %s", name.c_str(),
     camera->device_path.c_str(), format.width, format.height, format.fps, camera->out_width,
-    camera->out_height, use_flux_ ? "flux" : "dds");
+    camera->out_height, camera->image_pub->uses_flux() ? "flux" : "ros");
   return camera;
 }
 
@@ -252,23 +244,13 @@ void GenericCam::make_publishers(Camera & camera)
   const std::string base = "~/output/" + camera.name;
   const auto qos = rclcpp::QoS(10).reliable().durability_volatile();
   camera.info_pub = create_publisher<sensor_msgs::msg::CameraInfo>(base + "/camera_info", qos);
-  if (!use_flux_) {
-    camera.image_pub = create_publisher<sensor_msgs::msg::Image>(base + "/image_raw", qos);
-    return;
-  }
   // A fixed slot holds the whole frame, so subscribers on an integrated GPU read it in place.
-  flux::PublisherOptions options;
-  options.alloc = flux::Alloc::Slot;
+  flux_wrapper::PublisherOptions options;
+  options.alloc = flux_wrapper::Alloc::Slot;
   options.slot_size = static_cast<std::uint32_t>(camera.out_bytes + kSlotHeadroom);
   options.max_slot_size = options.slot_size;
-  camera.flux_pub = std::make_unique<flux::Publisher>(
-    *this, base + "/image_raw", options, FluxImage::kFingerprint);
-  if (mirror_to_ros_) {
-    camera.flux_pub->mirror_to_ros();
-  }
-  RCLCPP_INFO(
-    get_logger(), "[%s] flux channel %s", camera.name.c_str(),
-    camera.flux_pub->signpost_name().c_str());
+  camera.image_pub = std::make_unique<flux_wrapper::Publisher<sensor_msgs::msg::Image>>(
+    *this, base + "/image_raw", qos, options);
 }
 
 void GenericCam::apply_controls(const Camera & camera)
@@ -355,9 +337,7 @@ void GenericCam::handle_frame(Camera & camera, const RawFrame & frame)
   }
 
   const rclcpp::Time stamp(stamp_ns, RCL_ROS_TIME);
-  const bool published =
-    use_flux_ ? publish_flux(camera, frame, stamp) : publish_dds(camera, frame, stamp);
-  if (!published) {
+  if (!publish_image(camera, frame, stamp)) {
     return;
   }
   auto info = std::make_unique<sensor_msgs::msg::CameraInfo>(camera.info);
@@ -382,49 +362,31 @@ bool GenericCam::write_bgr(Camera & camera, const RawFrame & frame, uint8_t * bg
   return true;
 }
 
-bool GenericCam::publish_dds(Camera & camera, const RawFrame & frame, const rclcpp::Time & stamp)
+bool GenericCam::publish_image(Camera & camera, const RawFrame & frame, const rclcpp::Time & stamp)
 {
-  auto image = std::make_unique<sensor_msgs::msg::Image>();
-  image->data.resize(camera.out_bytes);
-  if (!write_bgr(camera, frame, image->data.data())) {
-    return false;
-  }
-  image->header.stamp = stamp;
-  image->header.frame_id = camera.frame_id;
-  image->height = camera.out_height;
-  image->width = camera.out_width;
-  image->encoding = kEncoding;
-  image->step = camera.out_width * 3;
-  camera.image_pub->publish(std::move(image));
-  return true;
-}
-
-bool GenericCam::publish_flux(Camera & camera, const RawFrame & frame, const rclcpp::Time & stamp)
-{
-  // The decoder writes straight into the loaned slot, so the frame is never copied.
-  FluxImage::Builder image = FluxImage::build__(*camera.flux_pub);
+  // The decoder writes straight into the loan, so the frame is never copied.
+  auto image = camera.image_pub->loan();
   if (!image) {
     camera.monitor->on_dropped_publish();
     return false;
   }
-  const auto pixels = image.alloc__data(camera.out_bytes);
+  const auto pixels = image.alloc_data(camera.out_bytes);
   if (!write_bgr(camera, frame, pixels.data())) {
     return false;
   }
-  const builtin_interfaces::msg::Time header_stamp = stamp;
-  image.set__header__stamp(header_stamp.sec, header_stamp.nanosec);
-  image.set__header__frame_id(camera.frame_id);
-  image.set__height(camera.out_height);
-  image.set__width(camera.out_width);
-  image.set__encoding(kEncoding);
-  image.set__is_bigendian(0);
-  image.set__step(camera.out_width * 3);
-  const flux::Published result = image.commit__();
-  if (result != flux::Published::Ok) {
+  std_msgs::msg::Header header;
+  header.stamp = stamp;
+  header.frame_id = camera.frame_id;
+  image.set_header(header);
+  image.set_height(camera.out_height);
+  image.set_width(camera.out_width);
+  image.set_encoding(kEncoding);
+  image.set_is_bigendian(0);
+  image.set_step(camera.out_width * 3);
+  if (!camera.image_pub->publish(std::move(image))) {
     camera.monitor->on_dropped_publish();
     RCLCPP_WARN_THROTTLE(
-      get_logger(), *get_clock(), 5000, "[%s] flux publish: %s", camera.name.c_str(),
-      flux::to_string(result));
+      get_logger(), *get_clock(), 5000, "[%s] image publish dropped a frame", camera.name.c_str());
     return false;
   }
   return true;

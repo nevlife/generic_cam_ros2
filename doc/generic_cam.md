@@ -3,7 +3,7 @@
 일반 USB 카메라(UVC)를 위한 ROS 2 Jazzy 드라이버다. 컴포넌트 노드 하나가 카메라 N대를 다룬다. 카메라 한 대는 N=1이다.
 
 ```text
-/dev/videoN -> V4L2 mmap -> 프레임 검증과 진단 -> libjpeg 또는 GStreamer 디코더 -> BGR -> dds 또는 flux
+/dev/videoN -> V4L2 mmap -> 프레임 검증과 진단 -> libjpeg 또는 GStreamer 디코더 -> BGR -> flux_wrapper(flux 또는 ROS)
 ```
 
 ## 실행
@@ -12,27 +12,27 @@
 ros2 launch generic_cam generic_cam.launch.py
 ```
 
-| launch 인자 | 기본값        | 뜻                                                                                                                             |
-| ----------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `config`    | `generic_cam` | `config/<config>.param.yaml`를 읽는다. 책상의 C922는 `config:=c922`로 띄운다. 전송과 mirror를 포함한 설정은 이 파일에서 바꾼다 |
-| `transport` | 빈 값         | 값을 주면 yaml의 `transport`를 덮어쓴다. 한 경로의 양 끝을 인자 하나로 맞출 때 쓴다                                            |
+| launch 인자 | 기본값        | 뜻                                                                                                      |
+| ----------- | ------------- | ------------------------------------------------------------------------------------------------------- |
+| `config`    | `generic_cam` | `config/<config>.param.yaml`를 읽는다. 책상의 C922는 `config:=c922`로 띄운다. 설정은 이 파일에서 바꾼다 |
 
-launch는 flux_components 컨테이너에 노드를 올린다. `ros2 run generic_cam generic_cam_node`로 단독 실행해도 발행은 같게 동작한다.
+launch는 `capa_component_container`에 노드를 올린다. `container:=<이름>`을 주면 이미 떠 있는 그 컨테이너에 올린다. `ros2 run generic_cam generic_cam_node`로 단독 실행해도 발행은 같게 동작한다.
+
+이미지는 flux_wrapper로 발행한다. flux와 ROS 가운데 어느 경로인지는 프로세스 환경의 `ENABLE_FLUX`가 정한다(`1`이면 flux). 구독자에게도 같은 값을 준다. flux 구독자는 ROS 경로의 발행자에게서 받지 못하기 때문이다.
 
 `/dev/videoN` 번호는 USB가 다시 잡히면 바뀐다. 시험 중에도 C922가 `/dev/video0`에서 `/dev/video1`로 옮겨 갔다. 고정 경로가 필요하면 udev 이름이나 `/dev/v4l/by-id/`를 `device`에 쓴다.
 
 ## 토픽
 
-| 노드 안 이름                    | launch가 연결하는 이름         | 타입                              | 전송           |
-| ------------------------------- | ------------------------------ | --------------------------------- | -------------- |
-| `~/output/<카메라>/image_raw`   | `/camera/<카메라>/image_raw`   | `sensor_msgs/Image`               | `transport` 값 |
-| `~/output/<카메라>/camera_info` | `/camera/<카메라>/camera_info` | `sensor_msgs/CameraInfo`          | 항상 dds       |
-| `/diagnostics`                  | 그대로                         | `diagnostic_msgs/DiagnosticArray` | 항상 dds       |
+| 노드 안 이름                    | launch가 연결하는 이름         | 타입                              | 전송                        |
+| ------------------------------- | ------------------------------ | --------------------------------- | --------------------------- |
+| `~/output/<카메라>/image_raw`   | `/camera/<카메라>/image_raw`   | `sensor_msgs/Image`               | flux_wrapper(`ENABLE_FLUX`) |
+| `~/output/<카메라>/camera_info` | `/camera/<카메라>/camera_info` | `sensor_msgs/CameraInfo`          | 항상 ROS                    |
+| `/diagnostics`                  | 그대로                         | `diagnostic_msgs/DiagnosticArray` | 항상 ROS                    |
 
 - 이미지와 camera_info의 stamp는 같은 값이다.
 - camera_info는 작은 메시지라서 flux로 보내지 않는다. flux_tools의 DepthCloud도 CameraInfo를 DDS에서 받는다.
-- dds QoS는 reliable, volatile, depth 10이다. 구독자는 reliable로 받는다.
-- mirror의 DDS QoS는 flux가 정한 best effort, depth 1이다. reliable 구독자는 이 토픽에 연결되지 않으므로 best effort로 구독한다. 시험에서 `ros2 topic hz`, `ros2 topic echo`, `ros2 topic bw`는 그대로 동작했다.
+- ROS QoS는 reliable, volatile, depth 10이다. 구독자는 reliable로 받는다.
 
 ## 파라미터
 
@@ -41,8 +41,6 @@ launch는 flux_components 컨테이너에 노드를 올린다. `ros2 run generic
 | 이름                        | 타입     | 뜻                                                                                          |
 | --------------------------- | -------- | ------------------------------------------------------------------------------------------- |
 | `cameras`                   | string[] | 카메라 이름 목록                                                                            |
-| `transport`                 | string   | `dds` 또는 `flux`                                                                           |
-| `flux_mirror_to_ros`        | bool     | flux 발행자의 `mirror_to_ros()`를 켠다                                                      |
 | `reconnect_ms`              | int      | 카메라가 끊기면 이 주기로 다시 연다. 0이면 끄고, 켜져 있으면 포맷과 control을 다시 적용한다 |
 | `diagnostic_updater.period` | double   | 진단 주기(초). diagnostic_updater가 선언한다                                                |
 | `<카메라>.device`           | string   | 장치 경로                                                                                   |
@@ -111,20 +109,20 @@ frozen은 내용만 본다. 렌즈를 완전히 가려 모든 값이 같아지�
 
 ## flux
 
-- 슬롯을 먼저 빌리고 디코더가 슬롯에 바로 쓴다. `rotation: 0`과 `decoder: libjpeg`에서 memcpy가 없다. 회전과 GStreamer 디코더에서는 한 번 복사한다.
-- flux에는 ROS로 넘어가는 자동 경로가 없다. ROS 도구로 보려면 `flux_mirror_to_ros`를 켜거나 `flux_bridge`를 띄운다.
+- flux_wrapper의 loan을 먼저 빌리고 디코더가 loan의 `data`에 바로 쓴다. flux 경로에서는 고정 슬롯(`Alloc::Slot`, 프레임 크기 + 8 KiB)이다. `rotation: 0`과 `decoder: libjpeg`에서 memcpy가 없다. 회전과 GStreamer 디코더에서는 한 번 복사한다.
+- mirror는 켜지 않는다. flux 경로의 이미지를 ROS 도구로 보려면 `flux_bridge`를 띄운다.
 
 ## 측정
 
 조건은 C922, 1920x1080 MJPEG 30 fps, i7-14700K, Cyclone DDS다. 노드는 CPU 8-9, `latency_probe`는 CPU 10-11에 고정했다. 격리 코어는 아니고 다른 프로세스가 함께 돌았다. 앞 30프레임을 뺀 1770프레임을 썼다.
 
-재현 방법은 다음과 같다. `latency_probe`는 시험 빌드에서만 설치된다.
+아래 표는 transport 파라미터가 있던 코드에서 쟀다. 그때의 `latency_probe`는 publish 시각(flux의 commit 시각과 DDS의 source timestamp)도 기록했다. 지금의 `latency_probe`는 flux_wrapper로 구독하고 stamp와 수신 시각만 기록하므로, 재현되는 것은 capture -> 구독자 행이다. 경로는 `ENABLE_FLUX`가 정한다. `latency_probe`는 시험 빌드에서만 설치된다.
 
 ```bash
-ros2 run generic_cam latency_probe flux /camera/c922/image_raw 1800 out.csv
+ros2 run generic_cam latency_probe /camera/c922/image_raw 1800 out.csv
 ```
 
-단위는 ms다. capture는 stamp이고, publish는 flux의 commit 시각과 DDS의 source timestamp다.
+단위는 ms다. capture는 stamp다. dds 행은 ROS 경로, flux + mirror 행은 지금 없는 mirror 설정이다.
 
 | 경로          | 구간                   | p50   | p90   | p99   | max   |
 | ------------- | ---------------------- | ----- | ----- | ----- | ----- |
